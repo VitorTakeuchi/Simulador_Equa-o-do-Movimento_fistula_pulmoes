@@ -66,16 +66,17 @@ st.subheader("Curvas Pressão × Volume")
 fig, ax = plt.subplots(1, 3, figsize=(18, 5))
 
 ax[0].plot(V_total, P_total)
-ax[0].set_title("Curva Global (Enganosa)")
+ax[0].set_title("Curva Global")
 ax[0].set_xlabel("Volume Total (L)")
 ax[0].set_ylabel("Pressão (cmH₂O)")
 
 ax[1].plot(VD, P_total)
-ax[1].set_title("Pulmão Direito (Revelador)")
+ax[1].set_title("Pulmão Direito")
 ax[1].set_xlabel("Volume Direito (L)")
 
 ax[2].plot(VE, P_total)
-ax[2].set_title("Pulmão Esquerdo com Fístula (Revelador)")
+ax[2].set_title("Pulmão Esquerdo com Fístula")
 ax[2].set_xlabel("Volume Esquerdo (L)")
 
 st.pyplot(fig)
+
