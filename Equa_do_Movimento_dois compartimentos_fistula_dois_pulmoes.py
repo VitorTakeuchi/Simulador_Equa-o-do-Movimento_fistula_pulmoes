@@ -2,81 +2,113 @@ import numpy as np
 import streamlit as st
 import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="Modelo Respiratório com Dois Pulmões", layout="wide")
+st.set_page_config(
+    page_title="Simulador Respiratório – Modelos Comparativos",
+    layout="wide"
+)
 
-st.title("Simulador Didático – Modelo Respiratório Distribuído")
+st.title("Simulador Didático do Sistema Respiratório")
 
-st.markdown("### Equação do Movimento")
+st.markdown("### Modelo 1 – Compartimento Pulmonar Único")
 st.latex(r"P(t) = E\,V(t) + R\,\dot V(t) + \mathrm{PEEP}")
 
-st.markdown(
-"""
-Agora o sistema é modelado como **dois pulmões em paralelo**:
-
-- **Pulmão Direito:** normal  
-- **Pulmão Esquerdo:** com fístula broncopulmonar  
-- Ambos compartilham **a mesma pressão**
-"""
-)
+st.markdown("### Modelo 2 – Dois Pulmões (Sistema Distribuído)")
+st.latex(r"\dot V_i = \frac{P(t) - E_i (V_i - FRC_i)}{R_i}")
 
 dt = 0.01
 t = np.arange(0, 20, dt)
 
-st.sidebar.header("Parâmetros Globais")
+st.sidebar.header("Entrada Ventilatória")
 
-PEEP = st.sidebar.slider("PEEP (cmH₂O)", 0.0, 15.0, 5.0, 0.5)
-A = st.sidebar.slider("Amplitude do Volume Oscilatório (L)", 0.1, 1.0, 0.5, 0.05)
+A = st.sidebar.slider("Amplitude do Volume (L)", 0.1, 1.0, 0.5, 0.05)
 f = st.sidebar.slider("Frequência Respiratória (Hz)", 0.05, 0.6, 0.25, 0.01)
+PEEP = st.sidebar.slider("PEEP (cmH₂O)", 0.0, 15.0, 5.0, 0.5)
 
-st.sidebar.header("Pulmão Direito (Normal)")
-E_D = st.sidebar.slider("Elastância Direita (cmH₂O/L)", 5.0, 40.0, 20.0, 0.5)
-R_D = st.sidebar.slider("Resistência Direita (cmH₂O·s/L)", 1.0, 20.0, 5.0, 0.5)
+V_in = A * np.sin(2 * np.pi * f * t)
+dV_in = np.gradient(V_in, dt)
+
+st.sidebar.header("Modelo Único")
+
+E = st.sidebar.slider("Elastância E", 5.0, 50.0, 20.0, 0.5)
+R = st.sidebar.slider("Resistência R", 0.0, 30.0, 5.0, 0.5)
+
+P_single = E * V_in + R * dV_in + PEEP
+
+st.sidebar.header("Pulmão Direito")
+ED = st.sidebar.slider("Elastância Direita", 5.0, 50.0, 25.0, 0.5)
+RD = st.sidebar.slider("Resistência Direita", 1.0, 30.0, 6.0, 0.5)
 FRC_D = st.sidebar.slider("FRC Direita (L)", 0.8, 2.0, 1.2, 0.1)
 
-st.sidebar.header("Pulmão Esquerdo (Com Fístula)")
-E_E = st.sidebar.slider("Elastância Esquerda (cmH₂O/L)", 5.0, 40.0, 30.0, 0.5)
-R_E = st.sidebar.slider("Resistência Esquerda (cmH₂O·s/L)", 1.0, 30.0, 10.0, 0.5)
-FRC_E = st.sidebar.slider("FRC Esquerda (L)", 0.5, 2.0, 1.0, 0.1)
+st.sidebar.header("Pulmão Esquerdo (com fístula)")
+EE = st.sidebar.slider("Elastância Esquerda", 5.0, 50.0, 15.0, 0.5)
+RE = st.sidebar.slider("Resistência Esquerda", 1.0, 30.0, 4.0, 0.5)
+FRC_E = st.sidebar.slider("FRC Esquerda (L)", 0.8, 2.0, 1.0, 0.1)
 
-fistula_frac = st.sidebar.slider(
-    "Fração de Volume Perdido pela Fístula", 0.0, 0.7, 0.3, 0.05
+fistula = st.sidebar.slider(
+    "Fração de Vazamento (fístula esquerda)",
+    0.0, 0.6, 0.3, 0.05
 )
 
-V_osc = A * np.sin(2 * np.pi * f * t)
-dV_osc = np.gradient(V_osc, dt)
+VD = np.zeros_like(t)
+VE = np.zeros_like(t)
 
-VD = FRC_D + V_osc
-VE = FRC_E + (1 - fistula_frac) * V_osc
+VD[0] = FRC_D
+VE[0] = FRC_E
 
-dVD = np.gradient(VD, dt)
-dVE = np.gradient(VE, dt)
+P_drive = P_single
 
-Pel_D = E_D * (VD - FRC_D)
-Pel_E = E_E * (VE - FRC_E)
+for i in range(1, len(t)):
 
-Pres_D = R_D * dVD
-Pres_E = R_E * dVE
+    dVD = (P_drive[i] - ED * (VD[i-1] - FRC_D)) / RD
+    VD[i] = VD[i-1] + dVD * dt
 
-P_total = (Pel_D + Pel_E) / 2 + (Pres_D + Pres_E) / 2 + PEEP
+    dVE = (P_drive[i] - EE * (VE[i-1] - FRC_E)) / RE
+    dVE *= (1 - fistula)
+    VE[i] = VE[i-1] + dVE * dt
 
 V_total = VD + VE
 
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("Modelo Único")
+
+    fig1, ax1 = plt.subplots(2, 1, figsize=(6, 6), sharex=True)
+    ax1[0].plot(t, V_in)
+    ax1[0].set_ylabel("Volume (L)")
+    ax1[1].plot(t, P_single)
+    ax1[1].set_ylabel("Pressão (cmH₂O)")
+    ax1[1].set_xlabel("Tempo (s)")
+    st.pyplot(fig1)
+
+with col2:
+    st.subheader("Modelo Distribuído")
+
+    fig2, ax2 = plt.subplots(3, 1, figsize=(6, 8), sharex=True)
+    ax2[0].plot(t, VD, label="Pulmão Direito")
+    ax2[0].plot(t, VE, label="Pulmão Esquerdo")
+    ax2[0].legend()
+    ax2[0].set_ylabel("Volume (L)")
+
+    ax2[1].plot(t, V_total)
+    ax2[1].set_ylabel("Volume Total (L)")
+
+    ax2[2].plot(t, P_drive)
+    ax2[2].set_ylabel("Pressão (cmH₂O)")
+    ax2[2].set_xlabel("Tempo (s)")
+    st.pyplot(fig2)
+
 st.subheader("Curvas Pressão × Volume")
 
-fig, ax = plt.subplots(1, 3, figsize=(18, 5))
+fig3, ax3 = plt.subplots(figsize=(8, 5))
 
-ax[0].plot(V_total, P_total)
-ax[0].set_title("Curva Global")
-ax[0].set_xlabel("Volume Total (L)")
-ax[0].set_ylabel("Pressão (cmH₂O)")
+ax3.plot(V_in, P_single, label="Modelo Único")
+ax3.plot(V_total, P_drive, label="Global (enganosa)")
+ax3.plot(VD, P_drive, "--", label="Pulmão Direito")
+ax3.plot(VE, P_drive, "--", label="Pulmão Esquerdo")
 
-ax[1].plot(VD, P_total)
-ax[1].set_title("Pulmão Direito")
-ax[1].set_xlabel("Volume Direito (L)")
+ax3.set_xlabel("Volume (L)")
+ax3.set_ylabel("Pressão (cmH₂O)")
+ax3.legend()
 
-ax[2].plot(VE, P_total)
-ax[2].set_title("Pulmão Esquerdo com Fístula")
-ax[2].set_xlabel("Volume Esquerdo (L)")
-
-st.pyplot(fig)
-
+st.pyplot(fig3)
